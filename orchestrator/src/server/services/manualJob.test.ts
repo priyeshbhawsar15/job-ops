@@ -91,6 +91,34 @@ describe("manual job inference", () => {
     expect(body.messages[0].content).not.toContain("<strong>");
   });
 
+  it("normalizes array-valued fields returned by the LLM", async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                title: "Software Engineer",
+                employer: "Acme",
+                disciplines: ["Computer Science", "Software Engineering"],
+                jobFunction: ["Engineering", "Development"],
+              }),
+            },
+          },
+        ],
+      }),
+    } as any);
+
+    const result = await inferManualJobDetails("JD text");
+
+    expect(result.warning).toBeUndefined();
+    expect(result.job.disciplines).toBe(
+      "Computer Science, Software Engineering",
+    );
+    expect(result.job.jobFunction).toBe("Engineering, Development");
+  });
+
   it("returns a warning when the API response fails", async () => {
     vi.mocked(global.fetch).mockResolvedValue({
       ok: false,

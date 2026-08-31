@@ -278,6 +278,73 @@ manualJobsRouter.post("/infer", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/manual-jobs/import-discovered - Idempotently import without processing/scoring
+ */
+manualJobsRouter.post("/import-discovered", async (req: Request, res: Response) => {
+  try {
+    const input = manualJobImportSchema.parse(req.body ?? {});
+    const job = input.job;
+    const source = cleanOptional(job.source);
+    const sourceJobId = cleanOptional(job.sourceJobId);
+
+    if (!source || !sourceJobId) {
+      return fail(
+        res,
+        badRequest("source and sourceJobId are required for discovered-only imports"),
+      );
+    }
+
+    const existingBySource = await jobsRepo.getJobBySourceJobId(
+      source,
+      sourceJobId,
+    );
+    const existing =
+      existingBySource ?? (await jobsRepo.getJobByUrl(job.jobUrl.trim()));
+    if (existing) {
+      return ok(res, {
+        id: existing.id,
+        created: false,
+        status: existing.status,
+      });
+    }
+
+    const createdJob = await jobsRepo.createJob({
+      source,
+      sourceJobId,
+      title: job.title.trim(),
+      employer: job.employer.trim(),
+      jobUrl: job.jobUrl.trim(),
+      applicationLink: cleanOptional(job.applicationLink) ?? undefined,
+      location: cleanOptional(job.location) ?? undefined,
+      salary: cleanOptional(job.salary) ?? undefined,
+      deadline: cleanOptional(job.deadline) ?? undefined,
+      jobDescription: job.jobDescription.trim(),
+      jobType: cleanOptional(job.jobType) ?? undefined,
+      jobLevel: cleanOptional(job.jobLevel) ?? undefined,
+      jobFunction: cleanOptional(job.jobFunction) ?? undefined,
+      disciplines: cleanOptional(job.disciplines) ?? undefined,
+      degreeRequired: cleanOptional(job.degreeRequired) ?? undefined,
+      starting: cleanOptional(job.starting) ?? undefined,
+    });
+
+    ok(
+      res,
+      {
+        id: createdJob.id,
+        created: true,
+        status: createdJob.status,
+      },
+      201,
+    );
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return fail(res, badRequest(error.message, error.flatten()));
+    }
+    fail(res, toAppError(error));
+  }
+});
+
+/**
  * POST /api/manual-jobs/import - Import a manually curated job into the DB
  */
 manualJobsRouter.post("/import", async (req: Request, res: Response) => {

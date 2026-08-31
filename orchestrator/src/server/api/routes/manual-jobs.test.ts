@@ -116,6 +116,71 @@ describe.sequential("Manual jobs API routes", () => {
     expect(readyBody.data.suitabilityScore).toBe(88);
   });
 
+  it("idempotently imports discovered-only jobs without processing or scoring", async () => {
+    const { processJob } = await import("@server/pipeline/index");
+    const { scoreJobSuitability } = await import("@server/services/scorer");
+    vi.clearAllMocks();
+    const payload = {
+      job: {
+        source: "job-radar:oracle",
+        sourceJobId: "R-123",
+        title: "Backend Engineer",
+        employer: "Oracle",
+        jobUrl: "https://careers.oracle.com/jobs/backend-engineer-R-123",
+        jobDescription: "Build reliable services",
+      },
+    };
+
+    const first = await fetch(`${baseUrl}/api/manual-jobs/import-discovered`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const firstBody = await first.json();
+    expect(first.status).toBe(201);
+    expect(firstBody).toMatchObject({
+      ok: true,
+      data: { created: true, status: "discovered" },
+    });
+
+    const replay = await fetch(`${baseUrl}/api/manual-jobs/import-discovered`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const replayBody = await replay.json();
+    expect(replay.status).toBe(200);
+    expect(replayBody).toMatchObject({
+      ok: true,
+      data: {
+        id: firstBody.data.id,
+        created: false,
+        status: "discovered",
+      },
+    });
+    expect(processJob).not.toHaveBeenCalled();
+    expect(scoreJobSuitability).not.toHaveBeenCalled();
+  });
+
+  it("requires stable source identity for discovered-only imports", async () => {
+    const response = await fetch(
+      `${baseUrl}/api/manual-jobs/import-discovered`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job: {
+            title: "Backend Engineer",
+            employer: "Oracle",
+            jobUrl: "https://careers.oracle.com/jobs/backend-engineer",
+            jobDescription: "Build reliable services",
+          },
+        }),
+      },
+    );
+    expect(response.status).toBe(400);
+  });
+
   it("rejects duplicate manual imports by source and source job id", async () => {
     const { scoreJobSuitability } = await import("@server/services/scorer");
     vi.mocked(scoreJobSuitability).mockResolvedValue({

@@ -13,22 +13,22 @@ export interface ManualJobInferenceResult {
   warning?: string | null;
 }
 
-/** Raw response type from the API (all fields are strings) */
+/** Raw response type from the API. Providers may violate the JSON schema. */
 interface ManualJobApiResponse {
-  title: string;
-  employer: string;
-  location: string;
-  salary: string;
-  deadline: string;
-  jobUrl: string;
-  applicationLink: string;
-  jobType: string;
-  jobLevel: string;
-  jobFunction: string;
-  disciplines: string;
-  degreeRequired: string;
-  starting: string;
-  jobDescription: string;
+  title?: unknown;
+  employer?: unknown;
+  location?: unknown;
+  salary?: unknown;
+  deadline?: unknown;
+  jobUrl?: unknown;
+  applicationLink?: unknown;
+  jobType?: unknown;
+  jobLevel?: unknown;
+  jobFunction?: unknown;
+  disciplines?: unknown;
+  degreeRequired?: unknown;
+  starting?: unknown;
+  jobDescription?: unknown;
 }
 
 /** JSON schema for manual job extraction response */
@@ -167,27 +167,54 @@ OUTPUT FORMAT (JSON ONLY):
 `.trim();
 }
 
-function normalizeDraft(parsed: ManualJobApiResponse): ManualJobDraft {
+function normalizeText(value: unknown): string | undefined {
+  const values = Array.isArray(value) ? value : [value];
+  const normalized = values
+    .filter(
+      (entry): entry is string | number =>
+        typeof entry === "string" || typeof entry === "number",
+    )
+    .map((entry) => String(entry).trim())
+    .filter(Boolean)
+    .join(", ");
+  return normalized || undefined;
+}
+
+export function normalizeDraft(
+  parsed: ManualJobApiResponse,
+): ManualJobDraft {
   const out: ManualJobDraft = {};
 
-  // Map each field, only including non-empty strings
-  if (parsed.title?.trim()) out.title = parsed.title.trim();
-  if (parsed.employer?.trim()) out.employer = parsed.employer.trim();
-  if (parsed.location?.trim()) out.location = parsed.location.trim();
-  if (parsed.salary?.trim()) out.salary = parsed.salary.trim();
-  if (parsed.deadline?.trim()) out.deadline = parsed.deadline.trim();
-  if (parsed.jobUrl?.trim()) out.jobUrl = parsed.jobUrl.trim();
-  if (parsed.applicationLink?.trim())
-    out.applicationLink = parsed.applicationLink.trim();
-  if (parsed.jobType?.trim()) out.jobType = parsed.jobType.trim();
-  if (parsed.jobLevel?.trim()) out.jobLevel = parsed.jobLevel.trim();
-  if (parsed.jobFunction?.trim()) out.jobFunction = parsed.jobFunction.trim();
-  if (parsed.disciplines?.trim()) out.disciplines = parsed.disciplines.trim();
-  if (parsed.degreeRequired?.trim())
-    out.degreeRequired = parsed.degreeRequired.trim();
-  if (parsed.starting?.trim()) out.starting = parsed.starting.trim();
-  if (parsed.jobDescription?.trim())
-    out.jobDescription = parsed.jobDescription.trim();
+  // Providers occasionally return arrays despite the string-only schema.
+  const title = normalizeText(parsed.title);
+  const employer = normalizeText(parsed.employer);
+  const location = normalizeText(parsed.location);
+  const salary = normalizeText(parsed.salary);
+  const deadline = normalizeText(parsed.deadline);
+  const jobUrl = normalizeText(parsed.jobUrl);
+  const applicationLink = normalizeText(parsed.applicationLink);
+  const jobType = normalizeText(parsed.jobType);
+  const jobLevel = normalizeText(parsed.jobLevel);
+  const jobFunction = normalizeText(parsed.jobFunction);
+  const disciplines = normalizeText(parsed.disciplines);
+  const degreeRequired = normalizeText(parsed.degreeRequired);
+  const starting = normalizeText(parsed.starting);
+  const jobDescription = normalizeText(parsed.jobDescription);
+
+  if (title) out.title = title;
+  if (employer) out.employer = employer;
+  if (location) out.location = location;
+  if (salary) out.salary = salary;
+  if (deadline) out.deadline = deadline;
+  if (jobUrl) out.jobUrl = jobUrl;
+  if (applicationLink) out.applicationLink = applicationLink;
+  if (jobType) out.jobType = jobType;
+  if (jobLevel) out.jobLevel = jobLevel;
+  if (jobFunction) out.jobFunction = jobFunction;
+  if (disciplines) out.disciplines = disciplines;
+  if (degreeRequired) out.degreeRequired = degreeRequired;
+  if (starting) out.starting = starting;
+  if (jobDescription) out.jobDescription = jobDescription;
 
   return out;
 }
