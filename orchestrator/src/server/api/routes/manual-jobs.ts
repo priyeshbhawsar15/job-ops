@@ -336,6 +336,44 @@ manualJobsRouter.post("/import-discovered", async (req: Request, res: Response) 
       },
       201,
     );
+
+    // Score asynchronously so job gets scored while keeping status at "discovered"
+    void (async () => {
+      try {
+        const rawProfile = await getProfile();
+        if (
+          !rawProfile ||
+          typeof rawProfile !== "object" ||
+          Array.isArray(rawProfile)
+        ) {
+          return;
+        }
+        const profile = rawProfile as Record<string, unknown>;
+        const {
+          score,
+          reason,
+          jobBrief,
+          jobUpdates = {},
+        } = await scoreJobSuitability(createdJob, profile);
+        await jobsRepo.updateJob(createdJob.id, {
+          ...jobUpdates,
+          status: "discovered",
+          suitabilityScore: score,
+          suitabilityReason: reason,
+          jobBrief,
+        });
+      } catch (error) {
+        logger.warn("Import-discovered job scoring failed", {
+          jobId: createdJob.id,
+          error,
+        });
+      }
+    })().catch((error) => {
+      logger.warn("Import-discovered job scoring task failed to start", {
+        jobId: createdJob.id,
+        error,
+      });
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return fail(res, badRequest(error.message, error.flatten()));
